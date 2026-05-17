@@ -153,3 +153,41 @@ xlabel("Time")
 
 ax = findobj(gcf,'Type','axes');
 linkaxes(ax,'x')
+
+%%
+window = 10;
+t_start = datetime(2026,2,3,2,0,0);
+t_end   = datetime(2026,2,3,5,0,0);
+
+idx = (time >= t_start) & (time <= t_end);
+
+time_f = time(idx);
+
+valve_f = pozycja_zaworu_wtrysku_1_strL(idx);
+flow_f = smoothdata(przeplyw_do_schl_1(idx), 'gaussian', window);
+temp_wtr_f = smoothdata(pomiar_temp_za_wtryskiem_1_strL(idx), 'gaussian', window);
+temp_przegr_f = smoothdata(pomiar_temp_za_przeg_1_strL(idx), 'gaussian', window);
+
+figure;
+
+subplot(4,1,1)
+plot(time_f, valve_f, 'Color', [0 0.4470 0.7410])
+grid on
+title("Pozycja zaworu")
+
+subplot(4,1,2)
+plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980])
+grid on
+title("Przepływ (filtered)")
+
+subplot(4,1,3)
+plot(time_f, temp_wtr_f, 'Color', [0.9290 0.6940 0.1250])
+grid on
+title("Temp za wtryskiem")
+
+subplot(4,1,4)
+plot(time_f, temp_przegr_f, 'Color', [0.4940 0.1840 0.5560])
+grid on
+title("Temp za przegrzewaczem")
+
+xlabel("Time")

@@ -1,8 +1,8 @@
 s = tf('s');
+T1_vals = logspace(log10(1), log10(50), 100);
+T2_vals = logspace(log10(250), log10(2000), 200);
 
-T2_vals = linspace(100, 10000, 50);
-T1_vals = linspace(1, 100, 50);
-L2_vals = [0, 5, 10, 20, 50, 100];
+L2_vals = [0];
 
 nL = length(L2_vals);
 nT2 = length(T2_vals);
@@ -32,6 +32,8 @@ for k = 1:nL
 
             T1 = T1_vals(j);
             T2 = T2_vals(i);
+            % Display the current T1 and T2 values
+            fprintf('    T1 = %.1f, T2 = %.1f\n', T1, T2);
 
             G_s = 1 / (T1*s + 1);
             G_p = tf(1, [T2 1], 'InputDelay', L2);

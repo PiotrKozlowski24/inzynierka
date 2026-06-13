@@ -79,6 +79,8 @@ przeplyw_do_schl_1 = T.x402LAE11FF901_av_Przep__wod_zrasz_do_sch__1;
 
 pozycja_zaworu_wtrysku_1_strL = T.x402LAE11AA401_pos_POZYCJAZaw_regul_wtrys_1st_L_2C;
 
+cisnienie = T.x402LBA10FP950_av_Ci_nienieParyZaKot_em;
+
 %%
 figure;
 plot(time, pomiar_temp_za_wtryskiem_1_strL)
@@ -191,3 +193,89 @@ grid on
 title("Temp za przegrzewaczem")
 
 xlabel("Time")
+
+%% Cisnienie - zawór - przeplyw
+window = 500;
+t_start = datetime(2026,2,7,20,0,0);
+t_end   = datetime(2026,2,8,10,0,0);
+
+idx = (time > t_start) & (time < t_end);
+
+time_f = time(idx);
+
+cisnienie_f  = medfilt1(cisnienie(idx),  window);
+przeplyw_f   = medfilt1(przeplyw_do_schl_1(idx), window);
+
+figure;
+
+subplot(3,1,1)
+plot(time_f, cisnienie_f, 'Color', [0 0.4470 0.7410])
+grid on
+title("Ciśnienie")
+
+subplot(3,1,2)
+plot(time_f, pozycja_zaworu_wtrysku_1_strL(idx), 'Color', [0.8500 0.3250 0.0980])
+grid on
+title("Pozycja zaworu")
+
+subplot(3,1,3)
+plot(time_f, przeplyw_f, 'Color', [0.9290 0.6940 0.1250])
+grid on
+title("Przepływ wtrysku [t/h]")
+
+xlabel("Time")
+
+ax = findobj(gcf,'Type','axes');
+linkaxes(ax,'x')
+
+%% Cisnienie
+
+
+figure;
+plot(time, cisnienie)
+hold on;
+plot(time, pozycja_zaworu_wtrysku_1_strL)
+grid on;
+
+legend( ...
+    "Cisnienie", ...
+    "Pozycja zaworu" ...
+);
+
+xlabel("Time")
+
+%%
+%% STATIC MODEL OF VALVE — pressure filter 12.9 ± 0.05
+
+% Pressure band
+p_center = 12.9;
+p_tol    = 0.01;
+
+% Filter mask
+idx_p = abs(cisnienie - p_center) <= p_tol;
+
+% Extract filtered pairs
+valve_p = pozycja_zaworu_wtrysku_1_strL(idx_p);
+flow_p  = przeplyw_do_schl_1(idx_p);
+
+% Remove NaNs
+valid = ~isnan(valve_p) & ~isnan(flow_p);
+valve_p = valve_p(valid);
+flow_p  = flow_p(valid);
+
+fprintf('Points in pressure band [%.2f, %.2f]: %d\n', ...
+    p_center - p_tol, p_center + p_tol, sum(idx_p));
+
+%% PLOT — static characteristic
+figure;
+
+scatter(valve_p, flow_p, 20, 'filled', ...
+    'MarkerFaceAlpha', 0.4, ...
+    'MarkerFaceColor', [0 0.4470 0.7410]);
+
+grid on;
+xlabel('Pozycja zaworu [%]');
+ylabel('Przepływ wtrysku [t/h]');
+title(sprintf('Statyczna charakterystyka zaworu  (p = %.2f ± %.2f bar)', ...
+    p_center, p_tol));
+legend(sprintf('n = %d próbek', sum(valid)));

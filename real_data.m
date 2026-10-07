@@ -55,7 +55,7 @@ save('bfb_01_processed.mat', 'T');
 %% LOAD TABLE
 load('bfb_01_processed.mat');
 %% TIME VECTOR
-time = datetime(T.Time_, ...
+time = datetime(T.Time_, ... 
     'InputFormat','dd.MM.yyyy HH:mm');
 
 %% EXAMPLE SIGNALS
@@ -151,7 +151,7 @@ plot(time, pomiar_temp_za_przeg_1_strL, 'Color', [0.4940 0.1840 0.5560])
 grid on
 title("Temp za przegrzewaczem")
 
-xlabel("Time")
+xlabel("Czas")
 
 ax = findobj(gcf,'Type','axes');
 linkaxes(ax,'x')
@@ -164,7 +164,6 @@ t_end   = datetime(2026,2,3,5,0,0);
 idx = (time >= t_start) & (time <= t_end);
 
 time_f = time(idx);
-
 valve_f = pozycja_zaworu_wtrysku_1_strL(idx);
 flow_f = smoothdata(przeplyw_do_schl_1(idx), 'gaussian', window);
 temp_wtr_f = smoothdata(pomiar_temp_za_wtryskiem_1_strL(idx), 'gaussian', window);
@@ -228,54 +227,357 @@ xlabel("Time")
 ax = findobj(gcf,'Type','axes');
 linkaxes(ax,'x')
 
-%% Cisnienie
 
+
+%% Cisnienie
+figure;
+plot(time, cisnienie, 'LineWidth', 1.5)
+hold on;
+plot(time, pozycja_zaworu_wtrysku_1_strL, 'LineWidth', 1.5)
+grid on;
+legend("Cisnienie", "Pozycja zaworu", 'Location', 'best');
+xlabel("Czas"); ylabel("Wartość");
+title("Ciśnienie i pozycja zaworu");
+%%
+p_ref = 12.9;
+p_tol = 0.05;
+idx = abs(cisnienie - p_ref) <= p_tol;
+u = pozycja_zaworu_wtrysku_1_strL(idx);
+q = przeplyw_do_schl_1(idx);
+valid = ~(isnan(u) | isnan(q));
+u = u(valid);
+q = q(valid);
+%%
+figure;
+scatter(u, q, 20, 'filled', 'MarkerFaceAlpha', 0.4)
+grid on;
+xlabel('Pozycja zaworu [%]');
+ylabel('Przepływ [t/h]');
+title(sprintf('Charakterystyka zaworu  p = %.1f ± %.2f bar', p_ref, p_tol));
+%%
+p = polyfit(u, q, 1);
+a = p(1); b = p(2);
+fprintf('Q = %.4f * u + %.4f\n', a, b);
+
+%%
+u_fit = linspace(min(u), max(u), 200);
+q_fit = polyval(p, u_fit);
+q_est = polyval(p, u);
+R2 = 1 - sum((q - q_est).^2) / sum((q - mean(q)).^2);
+fprintf('R² = %.4f\n', R2);
 
 figure;
-plot(time, cisnienie)
+scatter(u, q, 20, 'filled', 'MarkerFaceAlpha', 0.4, 'DisplayName', 'Dane')
 hold on;
-plot(time, pozycja_zaworu_wtrysku_1_strL)
+plot(u_fit, q_fit, 'LineWidth', 2, 'DisplayName', sprintf('F(u) = %.4f·u + %.4f', a, b))
 grid on;
+legend('Location', 'best');
+xlabel('Pozycja zaworu [%]'); ylabel('Przepływ [t/h]');
+title(sprintf('Charakterystyka zaworu  p = %.1f ± %.2f bar', p_ref, p_tol));
 
-legend( ...
-    "Cisnienie", ...
-    "Pozycja zaworu" ...
-);
+%%
+window = 200;
+
+% --- filtr ciśnienia ---
+idx2 = abs(cisnienie - p_ref) <= p_tol;
+
+time_cmp = time(idx2);
+u_cmp    = pozycja_zaworu_wtrysku_1_strL(idx2);
+q_raw    = przeplyw_do_schl_1(idx2);
+
+% --- filtr czasowy ---
+mask = time_cmp >= datetime(2026,2,6) & time_cmp <= datetime(2026,2,11);
+
+time_cmp = time_cmp(mask);
+u_cmp    = u_cmp(mask);
+q_raw    = q_raw(mask);
+
+% --- filtracja sygnału (po pełnym przycięciu danych) ---
+q_real = medfilt1(q_raw, window);
+
+% --- model liniowy ---
+q_model = a * u_cmp + b;
+
+% --- wykres ---
+figure;
+
+subplot(2,1,1);
+plot(time_cmp, q_real, 'LineWidth', 1.5, 'DisplayName', 'Przepływ rzeczywisty');
+hold on;
+plot(time_cmp, q_model, '--', 'LineWidth', 1.5, 'DisplayName', 'Model liniowy');
+
+grid on;
+legend('Location', 'best');
+ylabel('Przepływ [t/h]');
+title('Porównanie modelu zaworu z danymi (6–11 lutego)');
+
+subplot(2,1,2);
+plot(time_cmp, u_cmp, 'LineWidth', 1.5, 'Color', [0.85 0.33 0.10]);
+grid on;
+ylabel('Pozycja zaworu [%]');
+xlabel('Czas');
+
+linkaxes(findall(gcf,'Type','axes'), 'x');
+
+%% 
+
+% Przygotuj dane (wszystkie punkty naraz, nie tylko dwa ciśnienia)
+u_all = pozycja_zaworu_wtrysku_1_strL;
+p_all = cisnienie;
+q_all = przeplyw_do_schl_1;
+
+%% Przygotuj dane 2D
+valid = ~isnan(pozycja_zaworu_wtrysku_1_strL) & ...
+        ~isnan(cisnienie) & ...
+        ~isnan(przeplyw_do_schl_1);
+
+u_fit = pozycja_zaworu_wtrysku_1_strL(valid);
+p_fit = cisnienie(valid);
+q_fit = przeplyw_do_schl_1(valid);
+
+%% Opcja A - GUI (wybierz typ modelu interaktywnie)
+cftool(u_fit, p_fit, q_fit)
+
+%% Opcja B - z kodu, porównaj kilka modeli
+models = {'poly11','poly12','poly21','poly22','poly23','poly33'};
+
+for i = 1:length(models)
+    [sf, gof] = fit([u_fit, p_fit], q_fit, models{i});
+    fprintf('%-8s  R²=%.4f  RMSE=%.6f\n', models{i}, gof.rsquare, gof.rmse);
+end
+
+%% WYkres wtrysku i przegrzewacza (bloki inercyjne)
+window = 10;
+t_start = datetime(2026,2,15,5,0,0);
+t_end   = datetime(2026,2,15,7,0,0);
+
+idx = (time >= t_start) & (time <= t_end);
+
+time_f = time(idx);
+
+flow_f = smoothdata(przeplyw_do_schl_1(idx), 'gaussian', window);
+temp_wtr_f = smoothdata(pomiar_temp_za_wtryskiem_1_strL(idx), 'gaussian', window);
+temp_przegr_f = smoothdata(pomiar_temp_za_przeg_1_strL(idx), 'gaussian', window);
+
+figure;
+
+
+
+subplot(3,1,1)
+plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980])
+grid on
+title("Przepływ")
+
+subplot(3,1,2)
+plot(time_f, temp_wtr_f, 'Color', [0.9290 0.6940 0.1250])
+grid on
+title("Temp za wtryskiem")
+
+subplot(3,1,3)
+plot(time_f, temp_przegr_f, 'Color', [0.4940 0.1840 0.5560])
+grid on
+title("Temp za przegrzewaczem")
 
 xlabel("Time")
 
-%%
-%% STATIC MODEL OF VALVE — pressure filter 12.9 ± 0.05
+%% Dopasowanie modelu do odpowiedzi wtrysku
+Ts = 5;
 
-% Pressure band
-p_center = 12.9;
-p_tol    = 0.01;
+y = temp_wtr_f;
+u = flow_f;
 
-% Filter mask
-idx_p = abs(cisnienie - p_center) <= p_tol;
+y0 = mean(y(1:500));
+u0 = mean(u(1:500));
 
-% Extract filtered pairs
-valve_p = pozycja_zaworu_wtrysku_1_strL(idx_p);
-flow_p  = przeplyw_do_schl_1(idx_p);
+y0_wtr = y0;
+u0_wtr = u0;
 
-% Remove NaNs
-valid = ~isnan(valve_p) & ~isnan(flow_p);
-valve_p = valve_p(valid);
-flow_p  = flow_p(valid);
+data = iddata(y - y0, u - u0, Ts);
+sys_wtr = tfest(data, 1);
 
-fprintf('Points in pressure band [%.2f, %.2f]: %d\n', ...
-    p_center - p_tol, p_center + p_tol, sum(idx_p));
+tf(sys_wtr)
+K_wtr = dcgain(sys_wtr)
+p = pole(sys_wtr)
+T_wtr = (-1/p)/Ts
 
-%% PLOT — static characteristic
+compare(data,sys_wtr)
+
+%% Porównanie modelu wtryskiwacza z oryginałem
+y_wtrysk_model = lsim(sys_wtr, u - u0_wtr, seconds(time_f - time_f(1))) + y0_wtr;
+
+figure;
+subplot(2,1,1)
+plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980])
+grid on
+title("Przepływ")
+
+subplot(2,1,2)
+plot(time_f, temp_wtr_f)
+hold on
+plot(time_f, y_wtrysk_model, '--r')
+grid on
+title("Temp za wtryskiem")
+legend('Pomiar', 'Model')
+xlabel("Time")
+
+%% Dopasowanie modelu do odpowiedzi przegrzewacza
+Ts = 5;
+
+y = temp_przegr_f;
+u = temp_wtr_f;
+
+y0 = mean(y(1:500));
+u0 = mean(u(1:500));
+
+y0_przeg = y0;
+u0_przeg = u0;
+
+data = iddata(y - y0, u - u0, Ts);
+sys_przeg = tfest(data, 1);
+
+tf(sys_przeg)
+K_przeg = dcgain(sys_przeg)
+p = pole(sys_przeg)
+T_przeg = (-1/p)/Ts
+
+compare(data,sys_przeg)
+
+%% Porównanie modelu przegrzewacza z oryginałem
+y_przeg_model = lsim(sys_przeg, u - u0_przeg, seconds(time_f - time_f(1))) + y0_przeg;
+
+figure;
+subplot(2,1,1)
+plot(time_f, temp_wtr_f, 'Color', [0.8500 0.3250 0.0980])
+grid on
+title("Temp przed przegrzewaczem")
+
+subplot(2,1,2)
+plot(time_f, temp_przegr_f)
+hold on
+plot(time_f, y_przeg_model, '--r')
+grid on
+title("Temp za przegrzewaczem")
+legend('Pomiar', 'Model')
+xlabel("Time")
+
+%% Wykresy modeli dla całego czasu
+
+flow_all = smoothdata(przeplyw_do_schl_1, 'gaussian', window);
+temp_wtr_all = smoothdata(pomiar_temp_za_wtryskiem_1_strL, 'gaussian', window);
+temp_przegr_all = smoothdata(pomiar_temp_za_przeg_1_strL, 'gaussian', window);
+
+t_all = (0:length(time)-1)' * Ts;
+
+y_wtr_all = lsim(sys_wtr, flow_all - u0_wtr, t_all) + y0_wtr;
+
+y_przeg_all = lsim(sys_przeg, temp_wtr_all - u0_przeg, t_all) + y0_przeg;
+
 figure;
 
-scatter(valve_p, flow_p, 20, 'filled', ...
-    'MarkerFaceAlpha', 0.4, ...
-    'MarkerFaceColor', [0 0.4470 0.7410]);
+subplot(2,1,1)
+plot(time, temp_wtr_all)
+hold on
+plot(time, y_wtr_all, '--r', 'LineWidth', 1.2)
+grid on
+title("Temp za wtryskiem - cały czas")
+legend('Pomiar', 'Model')
+xlabel("Time")
 
-grid on;
-xlabel('Pozycja zaworu [%]');
-ylabel('Przepływ wtrysku [t/h]');
-title(sprintf('Statyczna charakterystyka zaworu  (p = %.2f ± %.2f bar)', ...
-    p_center, p_tol));
-legend(sprintf('n = %d próbek', sum(valid)));
+subplot(2,1,2)
+plot(time, temp_przegr_all)
+hold on
+plot(time, y_przeg_all, '--r', 'LineWidth', 1.2)
+grid on
+title("Temp za przegrzewaczem - cały czas")
+legend('Pomiar', 'Model')
+xlabel("Time")
+
+%% Wykresy modeli dla okresów modelowania zaworu
+
+window = 200;
+
+p_ref = 12.9;
+p_tol = 0.05;
+
+idx_model = abs(cisnienie - p_ref) <= p_tol;
+
+time_model = time(idx_model);
+valve_model = pozycja_zaworu_wtrysku_1_strL(idx_model);
+flow_model = przeplyw_do_schl_1(idx_model);
+temp_wtr_model = pomiar_temp_za_wtryskiem_1_strL(idx_model);
+temp_przegr_model = pomiar_temp_za_przeg_1_strL(idx_model);
+
+mask = time_model >= datetime(2026,2,6) & ...
+       time_model <= datetime(2026,2,11);
+
+time_model = time_model(mask);
+valve_model = valve_model(mask);
+flow_model = medfilt1(flow_model(mask), window);
+temp_wtr_model = smoothdata(temp_wtr_model(mask), 'gaussian', 10);
+temp_przegr_model = smoothdata(temp_przegr_model(mask), 'gaussian', 10);
+
+t_model = (0:length(time_model)-1)' * Ts;
+
+y_wtr_model = lsim(sys_wtr, flow_model - u0_wtr, t_model) + y0_wtr;
+y_przeg_model = lsim(sys_przeg, temp_wtr_model - u0_przeg, t_model) + y0_przeg;
+
+q_model = a * valve_model + b;
+
+figure;
+
+subplot(4,1,1)
+plot(time_model, valve_model)
+grid on
+title("Pozycja zaworu")
+ylabel("[%]")
+
+subplot(4,1,2)
+plot(time_model, flow_model)
+hold on
+plot(time_model, q_model, '--r', 'LineWidth', 1.2)
+grid on
+title("Przepływ")
+legend('Pomiar', 'Model zaworu')
+ylabel("[t/h]")
+
+subplot(4,1,3)
+plot(time_model, temp_wtr_model)
+hold on
+plot(time_model, y_wtr_model, '--r', 'LineWidth', 1.2)
+grid on
+title("Temp za wtryskiem")
+legend('Pomiar', 'Model')
+ylabel("[°C]")
+
+subplot(4,1,4)
+plot(time_model, temp_przegr_model)
+hold on
+plot(time_model, y_przeg_model, '--r', 'LineWidth', 1.2)
+grid on
+title("Temp za przegrzewaczem")
+legend('Pomiar', 'Model')
+ylabel("[°C]")
+xlabel("Time")
+
+linkaxes(findall(gcf,'Type','axes'), 'x')
+
+%% Wypisanie parametrów inercji
+
+disp('Wzmocnienie wtryskiwacza K1: ')
+disp(K_wtr)
+
+disp('Stała czasowa wtryskiwacza T1: ')
+disp(T_wtr)
+
+disp('Wzmocnienie przegrzewazca K2: ')
+disp(K_przeg)
+
+disp('Stała czasowa przegrzewacza T2: ')
+disp(T_przeg)
+
+T_przeg_T_wtr = T_przeg/T_wtr;
+
+disp('Iloraz T2/T1:')
+disp(T_przeg_T_wtr)
+
+save('parametry_inercji.mat', 'K_wtr', 'T_wtr', 'K_przeg', 'T_przeg', 'T_przeg_T_wtr');

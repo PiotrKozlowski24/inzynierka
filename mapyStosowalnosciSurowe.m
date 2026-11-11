@@ -1,21 +1,25 @@
 clear; clc;
 
 %% ===== Parametry =====
-cfg.baseFile   = 'simulation_results.mat';     % wyniki bez zakłóceń
-cfg.distFiles  = {'simulation_results_step_input.mat',  ...
-                  'simulation_results_step_middle.mat', ...
-                  'simulation_results_step_output.mat', ...
-                  'simulation_results_noise_input.mat', ...
-                  'simulation_results_noise_middle.mat', ...
-                  'simulation_results_noise_output.mat'};
-cfg.nBx        = 200;     % liczba binów w osi X (log10(T2/T1))
-cfg.nBy        = 40;      % liczba binów w osi Y (L2)
-cfg.ratioPct   = 98;      % percentyl |log2(iloraz)| wyznaczający zakres
-cfg.shareScale = false;   % true = wspólna skala dla ilorazów w danym zestawie
-cfg.climOS     = 10;      % zakres przeregulowania [p.p.]
-cfg.export     = false;   % true = zapis PNG (300 dpi) do folderu 'mapy'
-cfg.ratioMax   = 5;       % stała skala ilorazów: [1/ratioMax, ratioMax], np. [0.25 4]
-                          % [] = skala automatyczna (percentyl, jak dotąd)
+    cfg.baseFile   = 'simulation_results_wc_wcin5.mat';     % wyniki bez zakłóceń
+    cfg.distFiles  = {'simulation_results_step_input2.mat',  ...
+                      'simulation_results_step_middle2.mat', ...
+                      'simulation_results_step_output2.mat', ...
+                      'simulation_results_noise_input2.mat', ...
+                      'simulation_results_noise_middle2.mat', ...
+                      'simulation_results_noise_output2.mat'};
+    cfg.nBx        = 160;     % liczba binów w osi X (log10(T2/T1))
+    cfg.nBy        = 40;      % liczba binów w osi Y (L2)
+    cfg.ratioPct   = 98;      % percentyl |log2(iloraz)| wyznaczający zakres
+    cfg.shareScale = false;   % true = wspólna skala dla ilorazów w danym zestawie
+    cfg.climOS     = 5;      % zakres przeregulowania [p.p.]
+    cfg.export     = false;   % true = zapis PNG (300 dpi) do folderu 'mapy'
+    cfg.ratioMax   = 2;       % stała skala ilorazów: [1/ratioMax, ratioMax], np. [0.25 4]
+                              % [] = skala automatyczna (percentyl, jak dotąd)
+    
+    cfg.mask      = true;   % true = dodatkowa mapa 3-obszarowa dla każdej metryki
+    cfg.maskTol   = 0.05;   % iloraz w [1/1.1, 1.1] = "porównywalnie" (±10%)
+    cfg.maskTolOS = 1;      % dla przeregulowania: |różnica| < 1 p.p. = "porównywalnie"
 
 %% ===== Dane bazowe i biny (raz, wspólne dla wszystkich zestawów) =====
 S = load(cfg.baseFile);
@@ -157,6 +161,10 @@ function plotMaps(metrics, bins, cmap, cfg, tag)
             exportgraphics(gcf, fullfile('mapy', sprintf('mapa_%s_%s.png', tag, name)), ...
                            'Resolution', 300);
         end
+
+        if cfg.mask
+            plotMask(M{m}, metrics(m), bins, cfg, tag);
+        end
     end
 end
 
@@ -193,4 +201,104 @@ function [tk, tl] = ratioTicks(lim)
         tk = linspace(-lim, lim, 5);     % wąski zakres: 5 równych tików
     end
     tl = compose('%.3g', 2.^tk);
+end
+
+function plotMask(Mm, met, bins, cfg, tag)
+    % Klasyfikacja binów: -1 = kaskada lepsza, 0 = porównywalnie, +1 = gorsza.
+    % Dla ilorazów i różnic "mniej = lepiej" (czasy, ITAE, IAE, przeregulowanie).
+    cls = zeros(size(Mm));
+    if met.isRatio
+        cls(Mm < 1/(1 + cfg.maskTol)) = -1;
+        cls(Mm >    1 + cfg.maskTol ) =  1;
+    else
+        cls(Mm < -cfg.maskTolOS) = -1;
+        cls(Mm >  cfg.maskTolOS) =  1;
+    end
+    cls(isnan(Mm)) = NaN;
+
+    % Udziały obszarów (tylko biny z danymi)
+    nValid = sum(~isnan(cls(:)));
+    pB = 100 * sum(cls(:) == -1) / nValid;
+    pC = 100 * sum(cls(:) ==  0) / nValid;
+    pW = 100 * sum(cls(:) ==  1) / nValid;
+
+    cmap3 = [0.30 0.69 0.31;     % zielony - kaskada lepsza
+             0.90 0.90 0.90;     % szary   - porównywalnie
+             0.84 0.24 0.24];    % czerwony - kaskada gorsza
+
+    figure('Color', 'w', 'Position', [150 80 800 600], ...
+           'Name', [met.title ' - maska'], 'NumberTitle', 'off');
+    cb = drawMap(bins.xe, bins.ye, cls, cmap3, [-1 1]);
+    if met.isRatio && startsWith(met.title, 'ITAE')
+        [Lstar, p] = ratioThresholdL(Mm, bins, 1/(1 + cfg.maskTol));
+        xc = (bins.xe(1:end-1) + bins.xe(2:end)) / 2;
+        ok = ~isnan(Lstar);
+
+        hold on;
+        plot(10.^xc(ok), Lstar(ok), 'k.', 'MarkerSize', 10);          % granica z danych
+        if ~isempty(p)
+            plot(10.^xc(ok), polyval(p, xc(ok)), 'k-', 'LineWidth', 1.5);  % dopasowanie
+            fprintf('%s: L2*(x) = %.4g*x^2 + %.4g*x + %.4g, x = log10(T2/T1)\n', ...
+                    met.title, p(1), p(2), p(3));
+        end
+        hold off;
+    end
+    cb.Ticks      = [-0.67 0 0.67];
+    cb.TickLabels = {sprintf('lepsza (%.0f%%)', pB), ...
+                     sprintf('porównywalna (%.0f%%)', pC), ...
+                     sprintf('gorsza (%.0f%%)', pW)};
+    xlabel('T_2/T_1');
+    ylabel('L_2');
+    if met.isRatio
+        title(sprintf('%s - maska (próg ±%.0f%%)', met.title, 100*cfg.maskTol));
+    else
+        title(sprintf('%s - maska (próg ±%g p.p.)', met.title, cfg.maskTolOS));
+    end
+    box on;
+
+    if cfg.export
+        name = lower(regexprep(met.title, '[^\w]+', '_'));
+        exportgraphics(gcf, fullfile('mapy', sprintf('maska_%s_%s.png', tag, name)), ...
+                       'Resolution', 300);
+    end
+end
+
+function [Lstar, p] = ratioThresholdL(Mm, bins, thr)
+    % Granica obszaru "kaskada lepsza" (iloraz < thr) jako L2*(x),
+    % x = log10(T2/T1). Zwraca punkty z danych (Lstar) i wielomian 2. stopnia p.
+    yc = (bins.ye(1:end-1) + bins.ye(2:end)) / 2;   % środki binów L2
+    xc = (bins.xe(1:end-1) + bins.xe(2:end)) / 2;
+    nBx = size(Mm, 2);
+    Lstar = nan(1, nBx);
+
+    for c = 1:nBx
+        v = movmedian(Mm(:, c), 3, 'omitnan');       % lekkie wygładzenie
+        valid = find(~isnan(v));
+        if isempty(valid), continue; end
+
+        j = valid(end);                              % najwyższy bin z danymi
+        if v(j) >= thr, continue; end                % u góry brak obszaru "lepsza"
+
+        % schodzimy w dół, dopóki kaskada jest lepsza
+        while j > 1 && (isnan(v(j-1)) || v(j-1) < thr)
+            j = j - 1;
+        end
+
+        if j == 1
+            Lstar(c) = 0;                            % lepsza dla każdego L2
+        elseif ~isnan(v(j-1))
+            % interpolacja liniowa przecięcia z progiem
+            Lstar(c) = yc(j-1) + (thr - v(j-1)) * (yc(j) - yc(j-1)) / (v(j) - v(j-1));
+        else
+            Lstar(c) = bins.ye(j);
+        end
+    end
+
+    % Dopasowanie (pomijamy kolumny, gdzie granica "uciekła" do L2 = 0)
+    ok = ~isnan(Lstar) & Lstar > 0;
+    if nnz(ok) >= 4
+        p = polyfit(xc(ok), Lstar(ok), 6);
+    else
+        p = [];
+    end
 end

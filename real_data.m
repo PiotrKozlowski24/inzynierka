@@ -208,19 +208,22 @@ przeplyw_f   = medfilt1(przeplyw_do_schl_1(idx), window);
 figure;
 
 subplot(3,1,1)
-plot(time_f, cisnienie_f, 'Color', [0 0.4470 0.7410])
+plot(time_f, cisnienie_f, 'Color', [0 0.4470 0.7410], LineWidth=2)
 grid on
+ylabel("[bar]")
 title("Ciśnienie")
 
 subplot(3,1,2)
-plot(time_f, pozycja_zaworu_wtrysku_1_strL(idx), 'Color', [0.8500 0.3250 0.0980])
+plot(time_f, pozycja_zaworu_wtrysku_1_strL(idx), 'Color', [0.8500 0.3250 0.0980], LineWidth=2)
 grid on
 title("Pozycja zaworu")
+ylabel("[%]")
 
 subplot(3,1,3)
-plot(time_f, przeplyw_f, 'Color', [0.9290 0.6940 0.1250])
+plot(time_f, przeplyw_f, 'Color', [0.0 0.4 0.0], LineWidth=2)
 grid on
-title("Przepływ wtrysku [t/h]")
+title("Przepływ wtrysku")
+ylabel("[t/h]")
 
 xlabel("Time")
 
@@ -302,9 +305,9 @@ q_model = a * u_cmp + b;
 figure;
 
 subplot(2,1,1);
-plot(time_cmp, q_real, 'LineWidth', 1.5, 'DisplayName', 'Przepływ rzeczywisty');
+plot(time_cmp, q_real, 'LineWidth', 1.5, 'DisplayName', 'Przepływ rzeczywisty', LineWidth=2);
 hold on;
-plot(time_cmp, q_model, '--', 'LineWidth', 1.5, 'DisplayName', 'Model liniowy');
+plot(time_cmp, q_model, '--', 'LineWidth', 1.5, 'DisplayName', 'Model liniowy', LineWidth=2);
 
 grid on;
 legend('Location', 'best');
@@ -312,7 +315,7 @@ ylabel('Przepływ [t/h]');
 title('Porównanie modelu zaworu z danymi (6–11 lutego)');
 
 subplot(2,1,2);
-plot(time_cmp, u_cmp, 'LineWidth', 1.5, 'Color', [0.85 0.33 0.10]);
+plot(time_cmp, u_cmp, 'LineWidth', 1.5, 'Color', [0.85 0.33 0.10], LineWidth=2);
 grid on;
 ylabel('Pozycja zaworu [%]');
 xlabel('Czas');
@@ -364,21 +367,26 @@ figure;
 
 
 subplot(3,1,1)
-plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980])
+plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980], LineWidth=2)
 grid on
 title("Przepływ")
+ylabel("[t/h]")
 
 subplot(3,1,2)
-plot(time_f, temp_wtr_f, 'Color', [0.9290 0.6940 0.1250])
+plot(time_f, temp_wtr_f, LineWidth=2)
 grid on
 title("Temp za wtryskiem")
+ylabel("[°C]")
 
 subplot(3,1,3)
-plot(time_f, temp_przegr_f, 'Color', [0.4940 0.1840 0.5560])
+plot(time_f, temp_przegr_f, 'Color', [0.4940 0.1840 0.5560], LineWidth=2)
 grid on
 title("Temp za przegrzewaczem")
+ylabel("[°C]")
+
 
 xlabel("Time")
+
 
 %% Dopasowanie modelu do odpowiedzi wtrysku
 Ts = 5;
@@ -407,16 +415,18 @@ y_wtrysk_model = lsim(sys_wtr, u - u0_wtr, seconds(time_f - time_f(1))) + y0_wtr
 
 figure;
 subplot(2,1,1)
-plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980])
+plot(time_f, flow_f, 'Color', [0.8500 0.3250 0.0980], LineWidth=2)
 grid on
+ylabel("[t/h]")
 title("Przepływ")
 
 subplot(2,1,2)
-plot(time_f, temp_wtr_f)
+plot(time_f, temp_wtr_f, LineWidth=2)
 hold on
-plot(time_f, y_wtrysk_model, '--r')
+plot(time_f, y_wtrysk_model, '--r', LineWidth=2)
 grid on
 title("Temp za wtryskiem")
+ylabel("°C")
 legend('Pomiar', 'Model')
 xlabel("Time")
 
@@ -447,16 +457,18 @@ y_przeg_model = lsim(sys_przeg, u - u0_przeg, seconds(time_f - time_f(1))) + y0_
 
 figure;
 subplot(2,1,1)
-plot(time_f, temp_wtr_f, 'Color', [0.8500 0.3250 0.0980])
+plot(time_f, temp_wtr_f, 'Color', [0.8500 0.3250 0.0980], LineWidth=2)
 grid on
-title("Temp przed przegrzewaczem")
+ylabel("°C")
+title("Temperatura przed przegrzewaczem")
 
 subplot(2,1,2)
-plot(time_f, temp_przegr_f)
+plot(time_f, temp_przegr_f, LineWidth=2)
 hold on
-plot(time_f, y_przeg_model, '--r')
+plot(time_f, y_przeg_model, '--r', LineWidth=2)
 grid on
-title("Temp za przegrzewaczem")
+title("Temperatura za przegrzewaczem")
+ylabel("°C")
 legend('Pomiar', 'Model')
 xlabel("Time")
 
@@ -475,22 +487,24 @@ y_przeg_all = lsim(sys_przeg, temp_wtr_all - u0_przeg, t_all) + y0_przeg;
 figure;
 
 subplot(2,1,1)
-plot(time, temp_wtr_all)
+plot(time, temp_wtr_all, LineWidth=1.2)
 hold on
 plot(time, y_wtr_all, '--r', 'LineWidth', 1.2)
 grid on
 title("Temp za wtryskiem - cały czas")
 legend('Pomiar', 'Model')
-xlabel("Time")
+ylabel("°C")
+xlabel("Czas")
 
 subplot(2,1,2)
-plot(time, temp_przegr_all)
+plot(time, temp_przegr_all, LineWidth=1.2)
 hold on
 plot(time, y_przeg_all, '--r', 'LineWidth', 1.2)
 grid on
 title("Temp za przegrzewaczem - cały czas")
 legend('Pomiar', 'Model')
-xlabel("Time")
+ylabel("°C")
+xlabel("Czas")
 
 %% Wykresy modeli dla okresów modelowania zaworu
 
@@ -526,33 +540,33 @@ q_model = a * valve_model + b;
 figure;
 
 subplot(4,1,1)
-plot(time_model, valve_model)
+plot(time_model, valve_model, LineWidth=2)
 grid on
 title("Pozycja zaworu")
 ylabel("[%]")
 
 subplot(4,1,2)
-plot(time_model, flow_model)
+plot(time_model, flow_model, LineWidth=1.5)
 hold on
-plot(time_model, q_model, '--r', 'LineWidth', 1.2)
+plot(time_model, q_model, '--r', 'LineWidth', 2)
 grid on
 title("Przepływ")
 legend('Pomiar', 'Model zaworu')
 ylabel("[t/h]")
 
 subplot(4,1,3)
-plot(time_model, temp_wtr_model)
+plot(time_model, temp_wtr_model, LineWidth=1.5)
 hold on
-plot(time_model, y_wtr_model, '--r', 'LineWidth', 1.2)
+plot(time_model, y_wtr_model, '--r', 'LineWidth',2)
 grid on
 title("Temp za wtryskiem")
 legend('Pomiar', 'Model')
 ylabel("[°C]")
 
 subplot(4,1,4)
-plot(time_model, temp_przegr_model)
+plot(time_model, temp_przegr_model, LineWidth=1.5)
 hold on
-plot(time_model, y_przeg_model, '--r', 'LineWidth', 1.2)
+plot(time_model, y_przeg_model, '--r', 'LineWidth', 2)
 grid on
 title("Temp za przegrzewaczem")
 legend('Pomiar', 'Model')

@@ -2,15 +2,30 @@
 % Zastępuje całą sekcję "Analysis vs T2/T1 ratio" ze skryptu.
 % Wymaga zmiennych z simulation_results.mat (wczytywane poniżej).
 
-load('simulation_results.mat');
+load("simulation_results_wc_wcin5.mat");
 nL = numel(L2_vals);
 
 %% Parametry
-nBins  = 200;                              % liczba binów (skala log)
-nShow  = 3;                               % liczba pokazywanych opóźnień
-L2_idx = unique(round(linspace(1, nL, nShow)));   % równomiernie z całego przekroju
-colors = lines(numel(L2_idx));
+nBins = 20;                                % liczba binów (skala log)
 
+% >>> TU WPISZ WYBRANE OPÓŹNIENIA L2 <<<
+L2_chosen = [0 2 10 30 60];                  % dowolna liczba wartości
+% L2_chosen = [];                          % pusta lista = 4 równomiernie z przekroju
+
+if isempty(L2_chosen)
+    L2_idx = unique(round(linspace(1, nL, 4)));
+else
+    L2_idx = zeros(size(L2_chosen));
+    for q = 1:numel(L2_chosen)
+        [dmin, L2_idx(q)] = min(abs(L2_vals(:) - L2_chosen(q)));
+        if dmin > 1e-9
+            warning('L2 = %g nie ma w danych, użyto najbliższego: %g', ...
+                L2_chosen(q), L2_vals(L2_idx(q)));
+        end
+    end
+    L2_idx = unique(L2_idx, 'stable');     % usuwa duplikaty, zachowuje kolejność
+end
+colors = lines(numel(L2_idx));
 %% Metryki: kaskada vs jednopunktowa
 % isRatio = true  -> iloraz kaskada / jednopunktowa (1 = brak różnicy)
 % isRatio = false -> różnica kaskada - jednopunktowa [p.p.] (0 = brak różnicy);
@@ -76,4 +91,4 @@ for m = 1:numel(metrics)
     legend('Location', 'best');
 end
 
-sgtitle('Kaskada vs jednopunktowa w funkcji T_2/T_1 (linie = mediana w binie)');
+sgtitle('Kaskada vs. Jednopunktowa - Mediany ilorazów/różnicy wskaźników w funkcji T_2/T_1 dla różnych opóźnień L_2');
